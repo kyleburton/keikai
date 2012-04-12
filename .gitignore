@@ -1,6 +1,7 @@
+pom.xml
+*jar
+/lib/
+/classes/
+.lein-deps-sum
+*~
 .*.swp
-*.[568]
-*.o
-*.pb.go
-bin/
-pkg/
