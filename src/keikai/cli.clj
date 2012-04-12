@@ -5,7 +5,8 @@
   (:use clojure.contrib.logging))
 
 (defn -main
-  "Start Keikai service. Loads configuration file path via first command-line argument, or the default if none specified."
+  "Start Keikai service. Loads configuration file path via first
+   command-line argument, or the default if none specified."
   [& argv]
   (try
    (config/include (first argv))

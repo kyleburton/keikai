@@ -10,6 +10,7 @@
                                        javax.jms/jms
                                        com.sun.jdmk/jmxtools
                                        com.sun.jmx/jmxri]]
+    [io.netty/netty "3.3.1.Final"]
   ]
   :dev-dependencies [
     [swank-clojure "1.4.0-SNAPSHOT"]
