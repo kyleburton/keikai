@@ -1,6 +1,8 @@
 ;; vim: set ts=2 sw=2 et ai ft=clojure:
 (ns keikai.collectd
-  (:import (java.io EOFException)))
+  (:import (java.io EOFException)
+           (java.nio ByteBuffer
+                     ByteOrder)))
 
 (def header-len 4)
 (def field-types {0 :host
@@ -17,14 +19,31 @@
                   1 :gauge
                   2 :derive
                   3 :absolute})
+(def severities {1 :failure
+                 2 :warning
+                 4 :okay})
 
 (defn- read-str [ios len]
   (let [buf (byte-array len)]
     (.read ios buf 0 len)
-    (String. buf 0 (- len 1))))  ; len-1 to skip the NUL sentinel; collectd sends C strings
+    (String. buf 0 (- len 1))))  ; len-1 to skip the NUL sentinel; collectd sends C strings *sigh*
 
-(defn- read-values [ios pkt len]
-  nil)
+; collectd sends doubles in little-endian order, thus the dance below *sigh*
+(defn- read-double [ios]
+  (let [buf (byte-array 8)]
+    (.read ios buf)
+    (let [bb (ByteBuffer/wrap buf)]
+      (.order bb ByteOrder/LITTLE_ENDIAN)
+      (Double. (.getDouble bb)))))
+
+(defn- read-values [ios len]
+  (let [nvalues (.readUnsignedShort ios)
+        types (map (.readByte ios) (range nvalues))]
+    (map #(let [valtype ((int %1) value-types)]
+            (if (= :gauge valtype)
+              [valtype (read-double ios)]
+              [valtype (.readLong ios)]))
+         types)))
 
 (defn- read-obj [ios pkt]
   (try
@@ -55,7 +74,7 @@
                (= field :severity) (do
                                      (if (nil? (:notification pkt))
                                        (assoc pkt :notification {}))
-                                     (assoc pkt field (int (.readLong ios)))))
+                                     (assoc pkt field ((int (.readLong ios)) severities))))
          true)))
    (catch EOFException e
      nil)))
@@ -71,4 +90,4 @@
 (defn handle
   "Process an individual collectd packet."
   [pkt]
-  nil)
+  pkt)
