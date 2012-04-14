@@ -2,28 +2,19 @@
 (ns keikai.core
   (:import (java.net InetSocketAddress)
            (java.util.concurrent Executors)
-           (org.jboss.netty.bootstrap ServerBootstrap)
+           (org.jboss.netty.bootstrap ConnectionlessBootstrap)
            (org.jboss.netty.buffer ChannelBufferInputStream)
            (org.jboss.netty.channel ChannelPipelineFactory
                                     ChannelPipeline
                                     Channels
                                     SimpleChannelUpstreamHandler)
            (org.jboss.netty.channel.group DefaultChannelGroup)
-           (org.jboss.netty.channel.socket.nio NioServerSocketChannelFactory))
-  (:use clojure.contrib.logging))
+           (org.jboss.netty.channel.socket.nio NioDatagramChannelFactory))
+  (:use clojure.contrib.logging)
+  (:require [keikai.collectd :as collectd]))
 
-(defn handle
-  "Handle an individual incoming message."
-  [msg]
-  nil)
-
-(defn read-msg
-  "Read a complete message from an input stream."
-  [instream]
-  nil)
-
-(defn tcp-handler
-  "Returns a TCP connection handler."
+(defn udp-handler
+  "Returns a UDP connection handler."
   [channel-group]
   (proxy [SimpleChannelUpstreamHandler] []
     (channelOpen [context state-event]
@@ -31,46 +22,43 @@
     (messageReceived [context message-event]
                      (let [instream (ChannelBufferInputStream.
                                      (.getMessage message-event))
-                           msg (read-msg instream)]
-                       (handle msg)))
+                           msg (collectd/decode instream)]
+                       (collectd/handle msg)))
     (exceptionCaught [context exception-event]
-                     (warn (.getCause exception-event) "TCP handler caught"))))
+                     (warn (.getCause exception-event) "UDP handler caught"))))
 
-(defn tcp-channel-factory
-  "Generate a channel factory for use with a TCP server socket."
+(defn udp-channel-factory
+  "Generate a channel factory for use with a UDP datagram socket."
   []
-  (NioServerSocketChannelFactory.
-   (Executors/newCachedThreadPool)
+  (NioDatagramChannelFactory.
    (Executors/newCachedThreadPool)))
 
-(defn tcp-pipeline-factory
-  "Generate a TCP channel pipeline factory."
+(defn udp-pipeline-factory
+  "Generate a UDP channel pipeline factory."
   [channel-group]
   (proxy [ChannelPipelineFactory] []
     (getPipeline []
                  (let [p (Channels/pipeline)
-                       h (tcp-handler channel-group)]
-                   (.addLast p "keikai-tcp-handler" h)
+                       h (udp-handler channel-group)]
+                   (.addLast p "keikai-udp-handler" h)
                    p))))
 
-(defn tcp-server
-  "Starts a TCP server listening on the specified port or 7007 if none specified."
+(defn udp-server
+  "Starts a UDP server listening on the specified port or 25826 if none specified."
   ([]
-     (tcp-server {}))
+     (udp-server {}))
   ([opts]
-     (let [opts (merge {:port 7007}
-                       opts)
-           bootstrap (ServerBootstrap. (tcp-channel-factory))
+     (let [opts (merge {:port 25826} opts)
+           bootstrap (ConnectionlessBootstrap. (udp-channel-factory))
            all-channels (DefaultChannelGroup.)
-           factory (tcp-pipeline-factory all-channels)]
+           factory (udp-pipeline-factory all-channels)]
        (doto bootstrap
          (.setPipelineFactory factory)
-         (.setOption "child.tcpNoDelay" true)
-         (.setOption "child.keepAlive" true)
-         (.setOption "child.connectTimeoutMillis" 5000))
+         (.setOption "broadcast" "false"))
        (let [server-channel (.bind bootstrap (InetSocketAddress. (:port opts)))]
          (.add all-channels server-channel))
-       (info (str "TCP server " opts " started"))
+       (info (str "UDP server " opts " started"))
+       ; use this fn to shutdown this server
        (fn []
          (-> all-channels .close .awaitUninterruptibly)
          (. bootstrap releaseExternalResources)))))
@@ -78,4 +66,4 @@
 (defn start
   "Start core Keikai services."
   []
-  (tcp-server))
+  (udp-server))
