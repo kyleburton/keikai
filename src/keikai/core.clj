@@ -25,7 +25,7 @@
                            msg (collectd/decode instream)]
                        (collectd/handle msg)))
     (exceptionCaught [context exception-event]
-                     (warn (.getCause exception-event) "UDP handler caught"))))
+                     (warn (.getCause exception-event) "message caused error"))))
 
 (defn udp-channel-factory
   "Generate a channel factory for use with a UDP datagram socket."
