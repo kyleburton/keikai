@@ -50,8 +50,8 @@
 
 (defn- read-values [ios len]
   (let [nvalues (.readUnsignedShort ios)
-        types (map #(.readByte ios) (range nvalues))]
-    (map #(let [valtype ((int %1) value-types)]
+        types (map (fn [x] (.readByte ios)) (range nvalues))]
+    (map #(let [valtype (value-types %1)]
             (if (= :gauge valtype)
               [valtype (read-double ios 8)]
               [valtype (read-int ios 8)]))
@@ -80,15 +80,18 @@
         len (.readUnsignedShort ios)]
     (if (>= len header-len)
       (let [size (- len header-len)
-            f (or (field-fns type) 'discard-bytes)]
+            f (or (field-fns type) discard-bytes)]
         [type (f ios size)]))))
 
 (defn decode
   "Parse a collectd packet from the given input stream."
-  [ios]
-  (read-field ios))
+  [ios len]
+  (loop []
+    (let [x (read-field ios)]
+      (prn x))
+    (recur)))
 
 (defn handle
   "Process an individual collectd packet."
   [pkt]
-  (println pkt))
+  (println "packet:" pkt))

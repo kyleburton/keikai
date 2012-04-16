@@ -21,12 +21,13 @@
     (channelOpen [context state-event]
                  (.add channel-group (.getChannel state-event)))
     (messageReceived [context message-event]
-                     (let [instream (ChannelBufferInputStream.
-                                     (.getMessage message-event))
-                           msg (collectd/decode instream)]
+                     (let [buf (.getMessage message-event)
+                           instream (ChannelBufferInputStream. buf)
+                           msg (collectd/decode instream (.readable buf))]
                        (collectd/handle msg)))
     (exceptionCaught [context exception-event]
-                     (warn (.getCause exception-event) "message caused error"))))
+                     (warn (.getCause exception-event)
+                           "message caused error:"))))
 
 (defn udp-channel-factory
   "Generate a channel factory for use with a UDP datagram socket."
@@ -62,7 +63,7 @@
                      (FixedReceiveBufferSizePredictorFactory. (:max-len opts))))
        (let [server-channel (.bind bootstrap (InetSocketAddress. (:port opts)))]
          (.add all-channels server-channel))
-       (info "started UDP listener on port" (:port opts))
+       (println "started UDP listener on port" (:port opts))
        ; use this fn to shutdown this server
        (fn []
          (-> all-channels .close .awaitUninterruptibly)
