@@ -6,7 +6,8 @@
 (defn include
   "Load a Clojure file, typically for configuration purposes. The file is
    evaluated in the same namespace as this file."
-  [file]
-  (let [file (or file (first *command-line-args*) *default-config*)]
-    (binding [*ns* (find-ns 'keikai.config)]
-      (load-string (slurp file)))))
+  ([]
+     (include *default-config*))
+  ([file]
+     (binding [*ns* (find-ns 'keikai.config)]
+       (load-string (slurp file)))))

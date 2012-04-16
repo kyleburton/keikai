@@ -7,10 +7,11 @@
            (org.jboss.netty.channel ChannelPipelineFactory
                                     ChannelPipeline
                                     Channels
+                                    FixedReceiveBufferSizePredictorFactory
                                     SimpleChannelUpstreamHandler)
            (org.jboss.netty.channel.group DefaultChannelGroup)
            (org.jboss.netty.channel.socket.nio NioDatagramChannelFactory))
-  (:use clojure.contrib.logging)
+  (:use clojure.tools.logging)
   (:require [keikai.collectd :as collectd]))
 
 (defn udp-handler
@@ -48,22 +49,33 @@
   ([]
      (udp-server {}))
   ([opts]
-     (let [opts (merge {:port 25826} opts)
+     (let [opts (merge {:port 25826
+                        :max-len 1452}
+                       opts)
            bootstrap (ConnectionlessBootstrap. (udp-channel-factory))
            all-channels (DefaultChannelGroup.)
            factory (udp-pipeline-factory all-channels)]
        (doto bootstrap
          (.setPipelineFactory factory)
-         (.setOption "broadcast" "false"))
+         (.setOption "broadcast" "false")
+         (.setOption "receiveBufferSizePredictorFactory"
+                     (FixedReceiveBufferSizePredictorFactory. (:max-len opts))))
        (let [server-channel (.bind bootstrap (InetSocketAddress. (:port opts)))]
          (.add all-channels server-channel))
-       (info (str "UDP server " opts " started"))
+       (info "started UDP listener on port" (:port opts))
        ; use this fn to shutdown this server
        (fn []
          (-> all-channels .close .awaitUninterruptibly)
          (. bootstrap releaseExternalResources)))))
 
+(def shutdown-fn (atom #()))
+
 (defn start
   "Start core Keikai services."
   []
   (udp-server))
+
+(defn stop
+  "Stop core Keikai services."
+  []
+  (@shutdown-fn))

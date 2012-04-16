@@ -5,12 +5,8 @@
   :url "http://github.com/codeslinger/keikai"
   :dependencies [
     [clojure "1.3.0"]
-    [clojure-contrib "1.1.0"]
-    [log4j/log4j "1.2.16" :exclusions [javax.mail/mail
-                                       javax.jms/jms
-                                       com.sun.jdmk/jmxtools
-                                       com.sun.jmx/jmxri]]
     [io.netty/netty "3.3.1.Final"]
+    [org.clojure/tools.logging "0.2.3"]
   ]
   :dev-dependencies [
     [swank-clojure "1.4.0-SNAPSHOT"]
