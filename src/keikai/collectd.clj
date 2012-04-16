@@ -19,18 +19,6 @@
                   257 :severity
                   512 :signature
                   513 :encryption})
-(def field-fns {:host 'read-str
-                :time 'read-int
-                :time-hires 'read-int
-                :interval 'read-int
-                :interval-hires 'read-int
-                :plugin 'read-str
-                :plugin-instance 'read-str
-                :type 'read-str
-                :type-instance 'read-str
-                :message 'read-str
-                :severity 'read-severity
-                :values 'read-values})
 (def value-types {0 :counter
                   1 :gauge
                   2 :derive
@@ -62,7 +50,7 @@
 
 (defn- read-values [ios len]
   (let [nvalues (.readUnsignedShort ios)
-        types (map (.readByte ios) (range nvalues))]
+        types (map #(.readByte ios) (range nvalues))]
     (map #(let [valtype ((int %1) value-types)]
             (if (= :gauge valtype)
               [valtype (read-double ios 8)]
@@ -72,76 +60,35 @@
 (defn- discard-bytes [ios len]
   (dotimes [_ len]
     (.readByte ios))
-  nil)
+  true)
 
-(defn- parse-field [ios pkt]
+(def field-fns {:host read-str
+                :time read-int
+                :time-hires read-int
+                :interval read-int
+                :interval-hires read-int
+                :plugin read-str
+                :plugin-instance read-str
+                :type read-str
+                :type-instance read-str
+                :message read-str
+                :severity read-severity
+                :values read-values})
+
+(defn- read-field [ios]
   (let [type (field-types (.readUnsignedShort ios))
         len (.readUnsignedShort ios)]
-    (if (< len header-len)
-      nil
-      (try
-       (let [size (- len header-len)
-             f (or (field-fns type) 'discard-bytes)
-             data (apply f [ios size])]
-         (if (not (nil? data))
-           (do
-             (println size " " f " " type " => " data)))
-         true)
-       (catch EOFException e
-         nil)))))
+    (if (>= len header-len)
+      (let [size (- len header-len)
+            f (or (field-fns type) 'discard-bytes)]
+        [type (f ios size)]))))
 
 (defn decode
   "Parse a collectd packet from the given input stream."
   [ios]
-  (let [pkt {}]
-    (while (parse-field ios pkt)
-           nil)
-    pkt))
+  (read-field ios))
 
 (defn handle
   "Process an individual collectd packet."
   [pkt]
   (println pkt))
-
-;; (defn- xread-obj [ios pkt]
-;;   (try
-;;    (let [type (.readUnsignedShort ios)
-;;          len (.readUnsignedShort ios)]
-;;      (println "found obj of type" type "size" len)
-;;      (if (< len header-len)
-;;        nil
-;;        (let [size (- len header-len)
-;;              field (get field-types type)]
-;;          (println "got field" field "type" type "len" size)
-;;          (cond (= field :host) (assoc pkt field (read-str ios size))
-;;                (= field :time) (assoc pkt field (* (.readLong ios) 1000))
-;;                (= field :time-hires) (assoc pkt :time (* (.readLong ios) 1000))
-;;                (= field :plugin) (assoc pkt field (read-str ios size))
-;;                (= field :plugin-instance) (assoc pkt field (read-str ios size))
-;;                (= field :type) (assoc pkt field (read-str ios size))
-;;                (= field :type-instance) (assoc pkt field (read-str ios size))
-;;                (= field :values) (do
-;;                                    (if (nil? (:values pkt))
-;;                                      (assoc pkt :values {}))
-;;                                    (assoc (:values pkt) field (read-values ios pkt size)))
-;;                (= field :interval) (do
-;;                                      (if (nil? (:values pkt))
-;;                                        (assoc pkt :values {}))
-;;                                      (assoc (:values pkt) field (.readLong ios)))
-;;                (= field :interval-hires) (do
-;;                                            (if (nil? (:values pkt))
-;;                                              (assoc pkt :values {}))
-;;                                            (assoc (:values pkt) :interval (.readLong ios)))
-;;                (= field :message) (do
-;;                                     (if (nil? (:notification pkt))
-;;                                       (assoc pkt :notification {}))
-;;                                     (assoc (:notification pkt) field (read-str ios size)))
-;;                (= field :severity) (do
-;;                                      (if (nil? (:notification pkt))
-;;                                        (assoc pkt :notification {}))
-;;                                      (assoc pkt field
-;;                ; skip unknown fields
-;;                :else (dotimes [size] (.readByte ios)))
-;;          true)))
-;;    (catch EOFException e
-;;      nil)))
