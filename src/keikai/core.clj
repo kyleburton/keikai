@@ -23,11 +23,10 @@
     (messageReceived [context message-event]
                      (let [buf (.getMessage message-event)
                            instream (ChannelBufferInputStream. buf)
-                           msg (collectd/decode instream (.readable buf))]
+                           msg (collectd/decode instream (.readableBytes buf))]
                        (collectd/handle msg)))
     (exceptionCaught [context exception-event]
-                     (warn (.getCause exception-event)
-                           "message caused error:"))))
+                     (warn (.getCause exception-event) "message caused error:"))))
 
 (defn udp-channel-factory
   "Generate a channel factory for use with a UDP datagram socket."
