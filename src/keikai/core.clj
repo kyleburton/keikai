@@ -68,14 +68,21 @@
          (-> all-channels .close .awaitUninterruptibly)
          (. bootstrap releaseExternalResources)))))
 
-(def shutdown-fn (atom #()))
-
-(defn start
-  "Start core Keikai services."
-  []
-  (udp-server))
+(defonce shutdown-fn (atom nil))
 
 (defn stop
   "Stop core Keikai services."
   []
-  (@shutdown-fn))
+  (if @shutdown-fn
+    (do
+      (@shutdown-fn)
+      (reset! shutdown-fn nil))))
+
+(defn restart []
+  (stop)
+  (reset! shutdown-fn (udp-server)))
+
+(defn start
+  "Start core Keikai services."
+  []
+  (restart))
