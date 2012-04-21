@@ -4,7 +4,11 @@
            (java.nio ByteBuffer
                      ByteOrder)))
 
+; collectd packet field header length
+;   2 bytes -> field type (unsigned)
+;   2 bytes -> field length (unsigned)
 (def header-len 4)
+; values for field type in header
 (def field-types {0 :host
                   1 :time
                   2 :plugin
@@ -19,10 +23,12 @@
                   257 :severity
                   512 :signature
                   513 :encryption})
+; values to disambiguate types in list of values within a Values list
 (def value-types {0 :counter
                   1 :gauge
                   2 :derive
                   3 :absolute})
+; message severity values
 (def severities {1 :failure
                  2 :warning
                  4 :okay})
@@ -62,6 +68,7 @@
     (.readByte ios))
   true)
 
+; type -> handler function map for easy dispatch on field type
 (def field-fns {:host read-str
                 :time read-int
                 :time-hires read-int
@@ -83,7 +90,7 @@
             f (or (field-fns type) discard-bytes)]
         [len [type (f ios size)]]))))
 
-(defn decode
+(defn- parse-fields
   "Parse a collectd packet from the given input stream."
   [ios len]
   (try
@@ -98,8 +105,15 @@
    (catch EOFException e
      nil)))
 
+(defn decode
+  "Parse a collectd packet into a canonical metric information record."
+  [ios len]
+  (let [fields (parse-fields ios len)]
+    fields))
+
 (defn handle
   "Process an individual collectd packet."
   [pkt]
   (println "----packet----")
-  (doseq [x pkt] (prn x)))
+  (doseq [x pkt]
+    (prn x)))

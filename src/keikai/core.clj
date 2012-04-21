@@ -24,7 +24,7 @@
                      (let [buf (.getMessage message-event)
                            instream (ChannelBufferInputStream. buf)
                            msg (collectd/decode instream (.readableBytes buf))]
-                       (collectd/handle msg)))
+                       (prn msg)))
     (exceptionCaught [context exception-event]
                      (warn (.getCause exception-event) "message caused error:"))))
 
@@ -78,7 +78,9 @@
       (@shutdown-fn)
       (reset! shutdown-fn nil))))
 
-(defn restart []
+(defn restart
+  "Restart core Keikai services."
+  []
   (stop)
   (reset! shutdown-fn (udp-server)))
 
