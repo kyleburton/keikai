@@ -2,7 +2,9 @@
 (ns keikai.collectd
   (:import (java.io EOFException)
            (java.nio ByteBuffer
-                     ByteOrder)))
+                     ByteOrder))
+  (:require [clojure.string :as str]
+            [keikai.util :as u]))
 
 ; collectd packet field header length
 ;   2 bytes -> field type (unsigned)
@@ -32,6 +34,11 @@
 (def severities {1 :failure
                  2 :warning
                  4 :okay})
+; label fields to put in stack to keep track of packet parsing depth
+(def pos-fields '(:plugin
+                  :plugin-instance
+                  :type
+                  :type-instance))
 
 (defn- read-severity [ios len]
   (or (severities (int (.readLong ios)))
@@ -57,11 +64,12 @@
 (defn- read-values [ios len]
   (let [nvalues (.readUnsignedShort ios)
         types (map (fn [x] (.readByte ios)) (range nvalues))]
-    (vec (map #(let [valtype (value-types %1)]
-                 (if (= :gauge valtype)
-                   [valtype (read-double ios 8)]
-                   [valtype (read-int ios 8)]))
-              types))))
+    (vec
+     (map #(let [valtype (value-types %1)]
+             (if (= :gauge valtype)
+               [valtype (read-double ios 8)]
+               [valtype (read-int ios 8)]))
+          types))))
 
 (defn- discard-bytes [ios len]
   (dotimes [_ len]
@@ -105,11 +113,56 @@
    (catch EOFException e
      nil)))
 
+(defn- new-pos []
+  {:plugin nil
+   :plugin-instance nil
+   :type nil
+   :type-instance nil})
+
+(defn- mark-pos [pos type data]
+  (cond
+   (= type :plugin) (do
+                      (assoc pos :plugin data)
+                      (assoc pos :plugin-instance nil)
+                      (assoc pos :type nil)
+                      (assoc pos :type-instance nil))
+   (= type :plugin-instance) (do
+                               (assoc pos :plugin-instance data)
+                               (assoc pos :type nil)
+                               (assoc pos :type-instance nil))
+   (= type :type) (do
+                    (assoc pos :type data)
+                    (assoc pos :type-instance nil))
+   (= type :type-instance) (assoc pos :type-instance data))
+  pos)
+
+(defn- format-key [pos]
+  (let [a (:plugin pos)
+        b (:plugin-instance pos)
+        c (:type pos)
+        d (:type-instance pos)]
+    (str/join "." (keep identity '(a b c d)))))
+
+(defn- format-field [pkt pos type data]
+  (let [key (format-key pos)]
+    (if (not (contains? pos key))
+      (assoc pkt key {}))
+    (if (= "" key)
+      (assoc pkt type data)
+      (assoc (get pkt key) type data))))
+
 (defn decode
   "Parse a collectd packet into a canonical metric information record."
   [ios len]
-  (let [fields (parse-fields ios len)]
-    fields))
+  (let [fields (parse-fields ios len)
+        pkt {}
+        pos (new-pos)]
+    (for [f fields]
+      (let [[type data] f]
+        (if (u/in? type pos-fields)
+          (mark-pos pos type data)
+          (format-field pkt pos type data))))
+    pkt))
 
 (defn handle
   "Process an individual collectd packet."
