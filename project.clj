@@ -7,7 +7,7 @@
   :dependencies [
     [clojure "1.3.0"]
     [io.netty/netty "3.3.1.Final"]
-    [org.clojure/tools.logging "0.2.3"]
+    [org.clojure/tools.logging "1.2.1"]
   ]
   :dev-dependencies [
     [swank-clojure "1.4.2"]
